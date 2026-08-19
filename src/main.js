@@ -18,18 +18,23 @@ let keys = {};
 let p1;
 let p2;
 let gems = [];
+let obstacles = [];
 let particles = [];
 let animationFrameCount = 0;
 let gemSpawnTimer = 0;
+let obstacleCycleTimer = 0;
+let obstacleRespawnDelay = 0;
 
 const startButton = document.getElementById('start-btn');
 
 document.getElementById('game-mode').addEventListener('change', event => {
     gameMode = event.target.value;
     const aiContainer = document.getElementById('ai-difficulty-container');
+    const p1Title = document.getElementById('p1-title');
     const p2Title = document.getElementById('p2-title');
     if (gameMode === 'pvp') {
         aiContainer.classList.add('hidden');
+        p1Title.innerText = "Jogador 1 (WASD | Esp. 'E')";
         p2Title.innerText = "Jogador 2 (Setas | Esp. 'Shift')";
         p2Selection = null;
         document.querySelectorAll('.character-btn[data-player="2"]').forEach(button => button.classList.remove('selected'));
@@ -37,10 +42,13 @@ document.getElementById('game-mode').addEventListener('change', event => {
         return;
     }
     aiContainer.classList.remove('hidden');
+    p1Title.innerText = gameMode === 'ai-ai' ? 'Máquina 1 (IA | Especial Auto)' : "Jogador 1 (WASD | Esp. 'E')";
     p2Title.innerText = gameMode === 'ai-ai' ? 'Máquina 2 (IA | Especial Auto)' : 'Máquina (IA | Especial Auto)';
     if (!p1Selection) p1Selection = characters[Math.floor(Math.random() * characters.length)];
     const available = characters.filter(character => character !== p1Selection);
-    p2Selection = available[Math.floor(Math.random() * available.length)];
+    if (!p2Selection || p2Selection === p1Selection) p2Selection = available[Math.floor(Math.random() * available.length)];
+    updateCharacterSelection(1, p1Selection);
+    updateCharacterSelection(2, p2Selection);
     startButton.disabled = false;
 });
 
@@ -49,19 +57,28 @@ document.querySelectorAll('.character-btn').forEach(button => {
     button.addEventListener('click', event => {
         const selectedButton = event.currentTarget;
         const player = selectedButton.dataset.player;
-        const character = selectedButton.dataset.character;
+        const character = selectedButton.getAttribute('data-character');
         document.querySelectorAll(`.character-btn[data-player="${player}"]`).forEach(item => item.classList.remove('selected'));
         selectedButton.classList.add('selected');
         if (player === '1') p1Selection = character;
         else p2Selection = character;
-        if (gameMode !== 'pvp' && p1Selection) {
+        if (gameMode !== 'pvp' && player === '1' && p1Selection) {
             p2Selection = characters.filter(item => item !== p1Selection)[Math.floor(Math.random() * 2)];
+            updateCharacterSelection(2, p2Selection);
+        }
+        if (gameMode !== 'pvp') {
             startButton.disabled = false;
         } else {
             startButton.disabled = !(p1Selection && p2Selection);
         }
     });
 });
+
+function updateCharacterSelection(player, character) {
+    document.querySelectorAll(`.character-btn[data-player="${player}"]`).forEach(button => {
+        button.classList.toggle('selected', button.getAttribute('data-character') === character);
+    });
+}
 
 document.getElementById('start-btn').addEventListener('click', () => {
     if (!p1Selection || !p2Selection) return;
@@ -83,6 +100,11 @@ function initGame() {
     gemSpawnTimer = 0;
     p1 = createPlayer(200, 300, p1Selection, 3, 2);
     p2 = createPlayer(600, 300, p2Selection, -3, -2);
+    obstacles = createObstacles();
+    obstacleCycleTimer = 120 + Math.floor(Math.random() * 61);
+    obstacleRespawnDelay = 0;
+    spawnGem(p1.x - 90, p1.y);
+    spawnGem(p2.x + 90, p2.y);
     document.getElementById('pause-screen').classList.add('hidden');
     document.getElementById('pause-btn').innerText = 'Pausar';
     document.getElementById('winner-text').innerText = '';
@@ -97,7 +119,7 @@ function initGame() {
 }
 
 function createPlayer(x, y, character, vx, vy) {
-    return { x, y, radius: 30, hp: 100, gems: 0, character, ...characterData[character], vx, vy, specialActive: false, specialTimer: 0 };
+    return { x, y, radius: 30, hp: 300, gems: 0, character, ...characterData[character], vx, vy, specialActive: false, specialTimer: 0, specialDashTimer: 0, attackCooldown: 0, aiDecisionTimer: 0, aiAttackTimer: 70, aiGemFocusTimer: 0, aiStrafeDirection: 1 };
 }
 
 function togglePause() {
@@ -126,7 +148,8 @@ function handleKeyUp(event) { keys[event.key] = false; }
 function activateSpecial(player) {
     player.gems = 0;
     player.specialActive = true;
-    player.specialTimer = player.character === 'sakura' ? 150 : 90;
+    player.specialTimer = 150;
+    player.specialDashTimer = player.character === 'sakura' ? 0 : 22;
     createExplosion(player.x, player.y, player.accent, player.character === 'sakura' ? 10 : 5);
 }
 function createExplosion(x, y, color, amount = 8) {
@@ -136,12 +159,77 @@ function createExplosion(x, y, color, amount = 8) {
         particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, radius: Math.random() * 4 + 2, color, alpha: 1 });
     }
 }
+function spawnGem(x = Math.random() * (canvas.width - 60) + 30, y = Math.random() * (canvas.height - 60) + 30) {
+    let gemX = x;
+    let gemY = y;
+    let attempts = 0;
+    while (isGemBlocked(gemX, gemY) && attempts < 60) {
+        gemX = Math.random() * (canvas.width - 60) + 30;
+        gemY = Math.random() * (canvas.height - 60) + 30;
+        attempts++;
+    }
+    if (!isGemBlocked(gemX, gemY)) gems.push({ x: gemX, y: gemY, radius: 12 });
+}
+function isGemBlocked(x, y) {
+    return obstacles.some(obstacle => {
+        const nearestX = Math.max(obstacle.x, Math.min(x, obstacle.x + obstacle.width));
+        const nearestY = Math.max(obstacle.y, Math.min(y, obstacle.y + obstacle.height));
+        return Math.hypot(x - nearestX, y - nearestY) < 18;
+    });
+}
+function spawnGemPair() {
+    spawnGem();
+    spawnGem();
+}
+function createObstacles() {
+    const generated = [];
+    let attempts = 0;
+    const obstacleCount = 3 + Math.floor(Math.random() * 4);
+    while (generated.length < obstacleCount && attempts < 100) {
+        attempts++;
+        const obstacle = {
+            x: Math.random() * (canvas.width - 260) + 130,
+            y: Math.random() * (canvas.height - 180) + 90,
+            width: 45 + Math.random() * 45,
+            height: 35 + Math.random() * 45
+        };
+        const overlapsStart = [p1, p2].some(player => player && player.x > obstacle.x - player.radius && player.x < obstacle.x + obstacle.width + player.radius && player.y > obstacle.y - player.radius && player.y < obstacle.y + obstacle.height + player.radius);
+        const overlapsOther = generated.some(item => obstacle.x < item.x + item.width + 35 && obstacle.x + obstacle.width + 35 > item.x && obstacle.y < item.y + item.height + 35 && obstacle.y + obstacle.height + 35 > item.y);
+        if (!overlapsStart && !overlapsOther) generated.push(obstacle);
+    }
+    return generated;
+}
+function moveBlockedGems() {
+    gems.forEach(gem => {
+        if (!isGemBlocked(gem.x, gem.y)) return;
+        let attempts = 0;
+        do {
+            gem.x = Math.random() * (canvas.width - 60) + 30;
+            gem.y = Math.random() * (canvas.height - 60) + 30;
+            attempts++;
+        } while (isGemBlocked(gem.x, gem.y) && attempts < 60);
+    });
+}
 function update() {
     if (isPaused || gameOver) return;
     animationFrameCount++;
     gemSpawnTimer++;
-    if (gemSpawnTimer > 150 && gems.length < 5) {
-        gems.push({ x: Math.random() * (canvas.width - 60) + 30, y: Math.random() * (canvas.height - 60) + 30, radius: 12 });
+    if (obstacleRespawnDelay > 0) {
+        obstacleRespawnDelay--;
+    } else {
+        obstacleCycleTimer--;
+    }
+    if (obstacleCycleTimer <= 0 && obstacleRespawnDelay === 0 && obstacles.length > 0) {
+        obstacles = [];
+        obstacleRespawnDelay = 20;
+    }
+    if (obstacleRespawnDelay === 0 && obstacles.length === 0) {
+        obstacles = createObstacles();
+        moveBlockedGems();
+        obstacleCycleTimer = 120 + Math.floor(Math.random() * 61);
+    }
+    if (gemSpawnTimer > 150 && gems.length < 2) {
+        spawnGemPair();
         gemSpawnTimer = 0;
     }
     let p1Ax = 0;
@@ -158,7 +246,7 @@ function update() {
         if (keys.ArrowLeft) p2Ax = -0.42;
         if (keys.ArrowRight) p2Ax = 0.42;
     } else {
-        const aiSpeed = aiDifficulty === 'hard' ? 0.45 : aiDifficulty === 'medium' ? 0.28 : 0.18;
+        const aiSpeed = aiDifficulty === 'hard' ? 0.5 : aiDifficulty === 'medium' ? 0.36 : 0.25;
         const p2Move = getAiMove(p2, p1, aiSpeed);
         p2Ax = p2Move.x;
         p2Ay = p2Move.y;
@@ -167,36 +255,112 @@ function update() {
             p1Ax = p1Move.x;
             p1Ay = p1Move.y;
         }
-        if (p2.gems >= 3 && !p2.specialActive) activateSpecial(p2);
-        if (gameMode === 'ai-ai' && p1.gems >= 3 && !p1.specialActive) activateSpecial(p1);
     }
+    if (gameMode === 'ai' || gameMode === 'ai-ai') {
+        if (p2.gems >= 3 && !p2.specialActive) activateSpecial(p2);
+    }
+    if (gameMode === 'ai-ai' && p1.gems >= 3 && !p1.specialActive) activateSpecial(p1);
     updateSpecial(p1);
     updateSpecial(p2);
+    p1.attackCooldown = Math.max(0, p1.attackCooldown - 1);
+    p2.attackCooldown = Math.max(0, p2.attackCooldown - 1);
     movePlayer(p1, p1Ax, p1Ay);
     movePlayer(p2, p2Ax, p2Ay);
+    resolveObstacleCollision(p1);
+    resolveObstacleCollision(p2);
     updateParticles();
     collectGems();
     collidePlayers();
     updateHud();
     draw();
 }
+function resolveObstacleCollision(player) {
+    obstacles.forEach(obstacle => {
+        const nearestX = Math.max(obstacle.x, Math.min(player.x, obstacle.x + obstacle.width));
+        const nearestY = Math.max(obstacle.y, Math.min(player.y, obstacle.y + obstacle.height));
+        let offsetX = player.x - nearestX;
+        let offsetY = player.y - nearestY;
+        const distance = Math.hypot(offsetX, offsetY);
+        if (distance >= player.radius) return;
+        if (distance === 0) {
+            const left = player.x - obstacle.x;
+            const right = obstacle.x + obstacle.width - player.x;
+            const top = player.y - obstacle.y;
+            const bottom = obstacle.y + obstacle.height - player.y;
+            const smallest = Math.min(left, right, top, bottom);
+            if (smallest === left) { offsetX = -1; offsetY = 0; }
+            else if (smallest === right) { offsetX = 1; offsetY = 0; }
+            else if (smallest === top) { offsetX = 0; offsetY = -1; }
+            else { offsetX = 0; offsetY = 1; }
+        } else {
+            offsetX /= distance;
+            offsetY /= distance;
+        }
+        const pushDistance = distance === 0 ? player.radius : player.radius - distance;
+        player.x += offsetX * pushDistance;
+        player.y += offsetY * pushDistance;
+        const velocityAlongNormal = player.vx * offsetX + player.vy * offsetY;
+        if (velocityAlongNormal < 0) {
+            player.vx -= velocityAlongNormal * offsetX * 1.2;
+            player.vy -= velocityAlongNormal * offsetY * 1.2;
+        }
+        player.aiDecisionTimer = 0;
+    });
+}
 function getAiMove(player, opponent, speed) {
     let x = opponent.x - player.x;
     let y = opponent.y - player.y;
-    if (gems.length) {
+    const distance = Math.hypot(x, y) || 1;
+
+    player.aiDecisionTimer--;
+    if (player.aiDecisionTimer <= 0) {
+        player.aiDecisionTimer = 35 + Math.floor(Math.random() * 35);
+        player.aiStrafeDirection = Math.random() < 0.5 ? -1 : 1;
+    }
+
+    player.aiGemFocusTimer = Math.max(0, player.aiGemFocusTimer - 1);
+    if (player.aiGemFocusTimer > 0 && player.gems < 3 && gems.length) {
         const gem = gems.reduce((closest, item) => Math.hypot(player.x - item.x, player.y - item.y) < Math.hypot(player.x - closest.x, player.y - closest.y) ? item : closest);
         x = gem.x - player.x;
         y = gem.y - player.y;
+    } else if (opponent.specialActive && opponent.character !== 'sakura' && distance < 250) {
+        const awayX = player.x - opponent.x;
+        const awayY = player.y - opponent.y;
+        const perpendicularX = -awayY * player.aiStrafeDirection;
+        const perpendicularY = awayX * player.aiStrafeDirection;
+        x = awayX * 0.72 + perpendicularX * 0.28;
+        y = awayY * 0.72 + perpendicularY * 0.28;
+    } else if (player.specialActive) {
+        x = opponent.x - player.x;
+        y = opponent.y - player.y;
+    } else if (player.gems < 3 && gems.length) {
+        const gem = gems.reduce((closest, item) => Math.hypot(player.x - item.x, player.y - item.y) < Math.hypot(player.x - closest.x, player.y - closest.y) ? item : closest);
+        x = gem.x - player.x;
+        y = gem.y - player.y;
+    } else if (distance < 190) {
+        player.aiAttackTimer--;
+        if (player.aiAttackTimer <= 0) player.aiAttackTimer = 55 + Math.floor(Math.random() * 45);
+        const isAttacking = player.aiAttackTimer > 25;
+        const perpendicularX = -y * player.aiStrafeDirection;
+        const perpendicularY = x * player.aiStrafeDirection;
+        const approachWeight = isAttacking ? 0.9 : 0.2;
+        x = x * approachWeight + perpendicularX * (1 - approachWeight);
+        y = y * approachWeight + perpendicularY * (1 - approachWeight);
+    } else if (distance < 145) {
+        x = player.x - opponent.x;
+        y = player.y - opponent.y;
     }
-    if (Math.hypot(player.x - opponent.x, player.y - opponent.y) < 145 && !player.specialActive) { x = player.x - opponent.x; y = player.y - opponent.y; }
     const length = Math.hypot(x, y) || 1;
-    return { x: x / length * speed, y: y / length * speed };
+    const collectingGems = player.gems < 3 && gems.length > 0;
+    const movementSpeed = speed * (collectingGems ? 1.25 : player.specialActive && player.character !== 'sakura' ? 1.35 : player.specialActive ? 1.15 : 1);
+    return { x: x / length * movementSpeed, y: y / length * movementSpeed };
 }
 function updateSpecial(player) {
     if (!player.specialActive) return;
     player.specialTimer--;
+    player.specialDashTimer = Math.max(0, player.specialDashTimer - 1);
     if (player.character === 'sakura' && player.specialTimer % 15 === 0) {
-        player.hp = Math.min(100, player.hp + 4);
+        player.hp = Math.min(300, player.hp + 5);
         createExplosion(player.x, player.y, player.accent, 3);
     }
     if (player.specialTimer <= 0) player.specialActive = false;
@@ -205,14 +369,15 @@ function movePlayer(player, ax, ay) {
     if (['naruto', 'sasuke'].includes(player.character) && player.specialActive) {
         const target = player === p1 ? p2 : p1;
         const angle = Math.atan2(target.y - player.y, target.x - player.x);
-        ax += Math.cos(angle) * 0.85;
-        ay += Math.sin(angle) * 0.85;
+        const dashForce = player.specialDashTimer > 0 ? 2.1 : 0.85;
+        ax += Math.cos(angle) * dashForce;
+        ay += Math.sin(angle) * dashForce;
     }
     if (ax || ay) { player.vx *= 0.9; player.vy *= 0.9; }
     player.vx += ax;
     player.vy += ay;
     const speed = Math.hypot(player.vx, player.vy);
-    const maxSpeed = player.speed * (player.specialActive ? 1.25 : 1);
+    const maxSpeed = player.speed * (player.specialActive && player.character !== 'sakura' ? 1.45 : 1);
     if (speed > maxSpeed) { player.vx = player.vx / speed * maxSpeed; player.vy = player.vy / speed * maxSpeed; }
     player.x += player.vx;
     player.y += player.vy;
@@ -233,24 +398,63 @@ function collidePlayers() {
     if (distance >= p1.radius + p2.radius) return;
     const p1Offensive = p1.specialActive && p1.character !== 'sakura';
     const p2Offensive = p2.specialActive && p2.character !== 'sakura';
-    if (p1Offensive && p2Offensive) return;
-    if (p1Offensive) { p2.hp -= p1.character === 'naruto' ? 14 : 18; p1.specialActive = false; createExplosion(p2.x, p2.y, p1.accent, 16); return; }
-    if (p2Offensive) { p1.hp -= p2.character === 'naruto' ? 14 : 18; p2.specialActive = false; createExplosion(p1.x, p1.y, p2.accent, 16); return; }
     const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    const normalX = Math.cos(angle);
+    const normalY = Math.sin(angle);
     const overlap = p1.radius + p2.radius - distance;
-    p1.x -= Math.cos(angle) * overlap * 0.5; p1.y -= Math.sin(angle) * overlap * 0.5;
-    p2.x += Math.cos(angle) * overlap * 0.5; p2.y += Math.sin(angle) * overlap * 0.5;
-    const vx = p1.vx; const vy = p1.vy;
-    p1.vx = -p2.vx * 1.2; p1.vy = -p2.vy * 1.2; p2.vx = -vx * 1.2; p2.vy = -vy * 1.2;
-    p1.hp -= 0.6; p2.hp -= 0.6;
+    const separation = overlap * 0.5 + 4;
+    p1.x -= normalX * separation; p1.y -= normalY * separation;
+    p2.x += normalX * separation; p2.y += normalY * separation;
+    const relativeVelocity = (p2.vx - p1.vx) * normalX + (p2.vy - p1.vy) * normalY;
+    const bounceImpulse = Math.max(1.7, Math.min(3.1, Math.abs(relativeVelocity) * 0.7 + 1.4));
+    p1.vx = p1.vx * 0.58 - normalX * bounceImpulse;
+    p1.vy = p1.vy * 0.58 - normalY * bounceImpulse;
+    p2.vx = p2.vx * 0.58 + normalX * bounceImpulse;
+    p2.vy = p2.vy * 0.58 + normalY * bounceImpulse;
+    p1.aiGemFocusTimer = 60;
+    p2.aiGemFocusTimer = 60;
+    p1.aiDecisionTimer = 0;
+    p2.aiDecisionTimer = 0;
+    if (p1Offensive && p2Offensive) {
+        p1.hp -= 18;
+        p2.hp -= 18;
+        p1.specialActive = false;
+        p2.specialActive = false;
+        createExplosion((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, '#ffffff', 18);
+        return;
+    }
+    if (p1Offensive) {
+        p2.hp -= p1.character === 'naruto' ? 24 : 28;
+        p1.specialActive = false;
+        p1.attackCooldown = 20;
+        createExplosion(p2.x, p2.y, p1.accent, 14);
+        return;
+    }
+    if (p2Offensive) {
+        p1.hp -= p2.character === 'naruto' ? 24 : 28;
+        p2.specialActive = false;
+        p2.attackCooldown = 20;
+        createExplosion(p1.x, p1.y, p2.accent, 14);
+        return;
+    }
+    if (p1.attackCooldown <= 0) {
+            p2.hp -= 3;
+            p1.attackCooldown = 34;
+            createExplosion(p2.x, p2.y, p1.accent, 5);
+    }
+    if (p2.attackCooldown <= 0) {
+            p1.hp -= 3;
+            p2.attackCooldown = 34;
+            createExplosion(p1.x, p1.y, p2.accent, 5);
+    }
 }
 function updateHud() {
     document.getElementById('p1-hp').innerText = Math.max(0, Math.ceil(p1.hp));
     document.getElementById('p1-gems').innerText = p1.gems;
-    document.getElementById('p1-spec').innerText = p1.specialActive ? `${p1.special} ATIVO!` : p1.gems >= 3 ? "[PRESSIONE 'E']" : '';
+    document.getElementById('p1-spec').innerText = p1.specialActive ? `${p1.special} ATIVO!` : p1.gems >= 3 ? 'ESPECIAL PRONTO!' : '';
     document.getElementById('p2-hp').innerText = Math.max(0, Math.ceil(p2.hp));
     document.getElementById('p2-gems').innerText = p2.gems;
-    document.getElementById('p2-spec').innerText = p2.specialActive ? `${p2.special} ATIVO!` : p2.gems >= 3 ? "[PRESSIONE 'SHIFT']" : '';
+    document.getElementById('p2-spec').innerText = p2.specialActive ? `${p2.special} ATIVO!` : p2.gems >= 3 ? 'ESPECIAL PRONTO!' : '';
     if (p1.hp <= 0 || p2.hp <= 0) {
         gameOver = true;
         clearInterval(gameInterval);
@@ -268,6 +472,13 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(0, position); ctx.lineTo(canvas.width, position); ctx.stroke();
     }
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.strokeRect(0, 0, canvas.width, canvas.height);
+    obstacles.forEach(obstacle => {
+        ctx.fillStyle = '#485460';
+        ctx.strokeStyle = '#a4b0be';
+        ctx.lineWidth = 3;
+        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+        ctx.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+    });
     gems.forEach(gem => { ctx.beginPath(); ctx.arc(gem.x, gem.y, gem.radius + Math.sin(animationFrameCount * 0.2) * 2, 0, Math.PI * 2); ctx.fillStyle = '#fbc531'; ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.stroke(); });
     particles.forEach(particle => { ctx.globalAlpha = particle.alpha; ctx.beginPath(); ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2); ctx.fillStyle = particle.color; ctx.fill(); ctx.globalAlpha = 1; });
     drawPlayer(p1); drawPlayer(p2);
@@ -279,20 +490,79 @@ function drawPlayer(player) {
         ctx.globalAlpha = 0.3; ctx.fillStyle = '#9cff57'; ctx.beginPath(); ctx.arc(player.x, player.y, player.radius + 16, 0, Math.PI * 2); ctx.fill();
         ctx.globalAlpha = 1; ctx.strokeStyle = '#9cff57'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(player.x, player.y, player.radius + 12, 0, Math.PI * 2); ctx.stroke();
     }
-    if (player.specialActive && player.character !== 'sakura') {
-        const target = player === p1 ? p2 : p1;
-        const angle = Math.atan2(target.y - player.y, target.x - player.x);
-        const orbX = player.x + Math.cos(angle) * (player.radius + 17);
-        const orbY = player.y + Math.sin(angle) * (player.radius + 17);
-        ctx.fillStyle = player.character === 'naruto' ? '#36a9ff' : '#dffbff'; ctx.strokeStyle = player.accent; ctx.shadowBlur = 20; ctx.shadowColor = player.accent;
-        ctx.beginPath(); ctx.arc(orbX, orbY, player.character === 'naruto' ? 17 : 14, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        if (player.character === 'sasuke') { for (let spark = 0; spark < 5; spark++) { const sparkAngle = animationFrameCount * 0.2 + spark * Math.PI * 2 / 5; ctx.beginPath(); ctx.moveTo(orbX, orbY); ctx.lineTo(orbX + Math.cos(sparkAngle) * 23, orbY + Math.sin(sparkAngle) * 23); ctx.stroke(); } }
-        ctx.shadowBlur = 0;
-    }
     ctx.fillStyle = player.color; ctx.strokeStyle = player.specialActive ? player.accent : '#ffffff'; ctx.lineWidth = player.specialActive ? 5 : 4;
     ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     drawHair(player);
+    if (player.specialActive && player.character === 'naruto') drawRasengan(player);
+    if (player.specialActive && player.character === 'sasuke') drawChidori(player);
     ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(player.name, player.x, player.y - 3); ctx.font = 'bold 14px Arial'; ctx.fillText(Math.max(0, Math.ceil(player.hp)), player.x, player.y + 13);
+    ctx.restore();
+}
+function drawRasengan(player) {
+    const rotation = animationFrameCount * 0.16;
+    const target = player === p1 ? p2 : p1;
+    const angle = Math.atan2(target.y - player.y, target.x - player.x);
+    const handDistance = player.radius + 18;
+    const orbX = player.x + Math.cos(angle) * handDistance;
+    const orbY = player.y + Math.sin(angle) * handDistance;
+    ctx.save();
+    ctx.translate(orbX, orbY);
+    ctx.shadowBlur = 24;
+    ctx.shadowColor = '#66d9ff';
+    ctx.fillStyle = '#36a9ff';
+    ctx.strokeStyle = '#d9f8ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(190, 245, 255, 0.7)';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(-Math.cos(angle) * 18, -Math.sin(angle) * 18);
+    ctx.lineTo(-Math.cos(angle) * 36, -Math.sin(angle) * 36);
+    ctx.stroke();
+    for (let spiral = 0; spiral < 4; spiral++) {
+        ctx.save();
+        ctx.rotate(rotation + spiral * Math.PI / 2);
+        ctx.strokeStyle = spiral % 2 ? '#b8f2ff' : '#168de2';
+        ctx.beginPath();
+        ctx.arc(0, 0, 25 + spiral * 2, -1.2, 1.2);
+        ctx.stroke();
+        ctx.restore();
+    }
+    ctx.restore();
+}
+function drawChidori(player) {
+    const rotation = animationFrameCount * 0.23;
+    const target = player === p1 ? p2 : p1;
+    const angle = Math.atan2(target.y - player.y, target.x - player.x);
+    const handDistance = player.radius + 18;
+    const orbX = player.x + Math.cos(angle) * handDistance;
+    const orbY = player.y + Math.sin(angle) * handDistance;
+    ctx.save();
+    ctx.translate(orbX, orbY);
+    ctx.shadowBlur = 22;
+    ctx.shadowColor = '#b8efff';
+    ctx.fillStyle = '#dffbff';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    for (let ray = 0; ray < 6; ray++) {
+        const rayAngle = rotation + ray * Math.PI * 2 / 6;
+        const inner = 11;
+        const outer = 35 + (ray % 2) * 7;
+        ctx.strokeStyle = ray % 2 ? '#d7c8ff' : '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(rayAngle) * inner, Math.sin(rayAngle) * inner);
+        ctx.lineTo(Math.cos(rayAngle + 0.18) * (inner + 10), Math.sin(rayAngle + 0.18) * (inner + 10));
+        ctx.lineTo(Math.cos(rayAngle - 0.08) * outer, Math.sin(rayAngle - 0.08) * outer);
+        ctx.stroke();
+    }
     ctx.restore();
 }
 function drawHair(player) {
