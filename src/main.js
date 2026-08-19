@@ -1,10 +1,14 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+import { GAME_CONFIG } from './config.js';
+import { narutoData, drawRasengan } from './characters/naruto/naruto.js';
+import { sasukeData, drawChidori } from './characters/sasuke/sasuke.js';
+import { sakuraData } from './characters/sakura/sakura.js';
 
 const characterData = {
-    naruto: { name: 'Naruto', color: '#f07818', accent: '#ffd166', speed: 4.8, special: 'Rasengan' },
-    sasuke: { name: 'Sasuke', color: '#3949ab', accent: '#80d8ff', speed: 5.1, special: 'Chidori' },
-    sakura: { name: 'Sakura', color: '#d9578b', accent: '#9cff57', speed: 4.2, special: 'Cura' }
+    naruto: narutoData,
+    sasuke: sasukeData,
+    sakura: sakuraData
 };
 const characters = Object.keys(characterData);
 let p1Selection = null;
@@ -115,11 +119,11 @@ function initGame() {
     window.addEventListener('keyup', handleKeyUp);
     if (gameInterval) clearInterval(gameInterval);
     draw();
-    gameInterval = setInterval(update, 1000 / 60);
+    gameInterval = setInterval(update, 1000 / GAME_CONFIG.FRAME_RATE);
 }
 
 function createPlayer(x, y, character, vx, vy) {
-    return { x, y, radius: 30, hp: 300, gems: 0, character, ...characterData[character], vx, vy, specialActive: false, specialTimer: 0, specialDashTimer: 0, attackCooldown: 0, aiDecisionTimer: 0, aiAttackTimer: 70, aiGemFocusTimer: 0, aiStrafeDirection: 1 };
+    return { x, y, radius: GAME_CONFIG.PLAYER_RADIUS, hp: GAME_CONFIG.INITIAL_HP, gems: 0, character, ...characterData[character], vx, vy, specialActive: false, specialTimer: 0, specialDashTimer: 0, attackCooldown: 0, aiDecisionTimer: 0, aiAttackTimer: 70, aiGemFocusTimer: 0, aiStrafeDirection: 1 };
 }
 
 function togglePause() {
@@ -148,7 +152,7 @@ function handleKeyUp(event) { keys[event.key] = false; }
 function activateSpecial(player) {
     player.gems = 0;
     player.specialActive = true;
-    player.specialTimer = 150;
+    player.specialTimer = player.character === 'sakura' ? GAME_CONFIG.SAKURA_SPECIAL_DURATION : GAME_CONFIG.SPECIAL_DURATION;
     player.specialDashTimer = player.character === 'sakura' ? 0 : 22;
     createExplosion(player.x, player.y, player.accent, player.character === 'sakura' ? 10 : 5);
 }
@@ -360,7 +364,7 @@ function updateSpecial(player) {
     player.specialTimer--;
     player.specialDashTimer = Math.max(0, player.specialDashTimer - 1);
     if (player.character === 'sakura' && player.specialTimer % 15 === 0) {
-        player.hp = Math.min(300, player.hp + 5);
+        player.hp = Math.min(GAME_CONFIG.INITIAL_HP, player.hp + GAME_CONFIG.SAKURA_HEAL_AMOUNT);
         createExplosion(player.x, player.y, player.accent, 3);
     }
     if (player.specialTimer <= 0) player.specialActive = false;
@@ -416,34 +420,34 @@ function collidePlayers() {
     p1.aiDecisionTimer = 0;
     p2.aiDecisionTimer = 0;
     if (p1Offensive && p2Offensive) {
-        p1.hp -= 18;
-        p2.hp -= 18;
+        p1.hp -= GAME_CONFIG.CONTACT_DAMAGE * 6;
+        p2.hp -= GAME_CONFIG.CONTACT_DAMAGE * 6;
         p1.specialActive = false;
         p2.specialActive = false;
         createExplosion((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, '#ffffff', 18);
         return;
     }
     if (p1Offensive) {
-        p2.hp -= p1.character === 'naruto' ? 24 : 28;
+        p2.hp -= p1.character === 'naruto' ? GAME_CONFIG.NARUTO_SPECIAL_DAMAGE : GAME_CONFIG.SASUKE_SPECIAL_DAMAGE;
         p1.specialActive = false;
         p1.attackCooldown = 20;
         createExplosion(p2.x, p2.y, p1.accent, 14);
         return;
     }
     if (p2Offensive) {
-        p1.hp -= p2.character === 'naruto' ? 24 : 28;
+        p1.hp -= p2.character === 'naruto' ? GAME_CONFIG.NARUTO_SPECIAL_DAMAGE : GAME_CONFIG.SASUKE_SPECIAL_DAMAGE;
         p2.specialActive = false;
         p2.attackCooldown = 20;
         createExplosion(p1.x, p1.y, p2.accent, 14);
         return;
     }
     if (p1.attackCooldown <= 0) {
-            p2.hp -= 3;
+            p2.hp -= GAME_CONFIG.CONTACT_DAMAGE;
             p1.attackCooldown = 34;
             createExplosion(p2.x, p2.y, p1.accent, 5);
     }
     if (p2.attackCooldown <= 0) {
-            p1.hp -= 3;
+            p1.hp -= GAME_CONFIG.CONTACT_DAMAGE;
             p2.attackCooldown = 34;
             createExplosion(p1.x, p1.y, p2.accent, 5);
     }
@@ -493,76 +497,9 @@ function drawPlayer(player) {
     ctx.fillStyle = player.color; ctx.strokeStyle = player.specialActive ? player.accent : '#ffffff'; ctx.lineWidth = player.specialActive ? 5 : 4;
     ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     drawHair(player);
-    if (player.specialActive && player.character === 'naruto') drawRasengan(player);
-    if (player.specialActive && player.character === 'sasuke') drawChidori(player);
+    if (player.specialActive && player.character === 'naruto') drawRasengan(ctx, player, player === p1 ? p2 : p1, animationFrameCount);
+    if (player.specialActive && player.character === 'sasuke') drawChidori(ctx, player, player === p1 ? p2 : p1, animationFrameCount);
     ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(player.name, player.x, player.y - 3); ctx.font = 'bold 14px Arial'; ctx.fillText(Math.max(0, Math.ceil(player.hp)), player.x, player.y + 13);
-    ctx.restore();
-}
-function drawRasengan(player) {
-    const rotation = animationFrameCount * 0.16;
-    const target = player === p1 ? p2 : p1;
-    const angle = Math.atan2(target.y - player.y, target.x - player.x);
-    const handDistance = player.radius + 18;
-    const orbX = player.x + Math.cos(angle) * handDistance;
-    const orbY = player.y + Math.sin(angle) * handDistance;
-    ctx.save();
-    ctx.translate(orbX, orbY);
-    ctx.shadowBlur = 24;
-    ctx.shadowColor = '#66d9ff';
-    ctx.fillStyle = '#36a9ff';
-    ctx.strokeStyle = '#d9f8ff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, 22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(190, 245, 255, 0.7)';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(-Math.cos(angle) * 18, -Math.sin(angle) * 18);
-    ctx.lineTo(-Math.cos(angle) * 36, -Math.sin(angle) * 36);
-    ctx.stroke();
-    for (let spiral = 0; spiral < 4; spiral++) {
-        ctx.save();
-        ctx.rotate(rotation + spiral * Math.PI / 2);
-        ctx.strokeStyle = spiral % 2 ? '#b8f2ff' : '#168de2';
-        ctx.beginPath();
-        ctx.arc(0, 0, 25 + spiral * 2, -1.2, 1.2);
-        ctx.stroke();
-        ctx.restore();
-    }
-    ctx.restore();
-}
-function drawChidori(player) {
-    const rotation = animationFrameCount * 0.23;
-    const target = player === p1 ? p2 : p1;
-    const angle = Math.atan2(target.y - player.y, target.x - player.x);
-    const handDistance = player.radius + 18;
-    const orbX = player.x + Math.cos(angle) * handDistance;
-    const orbY = player.y + Math.sin(angle) * handDistance;
-    ctx.save();
-    ctx.translate(orbX, orbY);
-    ctx.shadowBlur = 22;
-    ctx.shadowColor = '#b8efff';
-    ctx.fillStyle = '#dffbff';
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(0, 0, 16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    for (let ray = 0; ray < 6; ray++) {
-        const rayAngle = rotation + ray * Math.PI * 2 / 6;
-        const inner = 11;
-        const outer = 35 + (ray % 2) * 7;
-        ctx.strokeStyle = ray % 2 ? '#d7c8ff' : '#ffffff';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(rayAngle) * inner, Math.sin(rayAngle) * inner);
-        ctx.lineTo(Math.cos(rayAngle + 0.18) * (inner + 10), Math.sin(rayAngle + 0.18) * (inner + 10));
-        ctx.lineTo(Math.cos(rayAngle - 0.08) * outer, Math.sin(rayAngle - 0.08) * outer);
-        ctx.stroke();
-    }
     ctx.restore();
 }
 function drawHair(player) {
