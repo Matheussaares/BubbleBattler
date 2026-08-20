@@ -1,6 +1,6 @@
 body {
     margin: 0;
-    background: #1e1e1e;
+    background: #10151d;
     color: white;
     font-family: Arial, sans-serif;
     display: flex;
@@ -16,10 +16,173 @@ body {
 
 #menu {
     text-align: center;
-    background: #2d2d2d;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    width: min(1180px, 100%);
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.selection-layout {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(280px, 430px) minmax(180px, 1fr);
+    align-items: center;
+    gap: 28px;
+    min-height: 560px;
+    padding: 28px;
+    background: radial-gradient(circle at center, #26364a 0, #151e29 48%, #0b1017 100%);
+    border: 2px solid #5e7187;
+    box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.65), 0 12px 35px rgba(0, 0, 0, 0.55);
+    animation: selection-screen-in 0.8s ease-out both;
+}
+
+.selection-panel {
+    padding: 28px 22px;
+    background: rgba(12, 17, 24, 0.88);
+    border: 1px solid #8495a8;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.45);
+    animation: panel-in 0.7s 0.2s ease-out both;
+}
+
+.selection-panel h1 {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 46px);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.selection-kicker {
+    margin: 8px 0 22px;
+    color: #fbc531;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.character-portrait {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 340px;
+    justify-content: center;
+    text-transform: uppercase;
+    animation: portrait-in 0.8s ease-out both;
+}
+
+.portrait-p1 { color: #ff9f43; }
+.portrait-p2 { color: #70a1ff; animation-delay: 0.15s; }
+
+.portrait-label {
+    margin-bottom: 20px;
+    color: #fff;
+    font-size: 13px;
+    letter-spacing: 3px;
+}
+
+.portrait-bubble {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 170px;
+    aspect-ratio: 1;
+    margin-bottom: 24px;
+    border: 8px solid #f6f8fb;
+    border-radius: 50%;
+    color: #0a1117;
+    font-size: 68px;
+    font-weight: 900;
+    text-shadow: 0 2px 0 rgba(255,255,255,0.85);
+    box-shadow: 0 0 0 8px rgba(255,255,255,0.12), 0 18px 35px rgba(0,0,0,0.55);
+    animation: bubble-float 3s ease-in-out infinite;
+}
+
+.portrait-bubble::before {
+    content: '';
+    position: absolute;
+    top: -22px;
+    width: 112px;
+    height: 44px;
+    border-radius: 55% 55% 35% 35%;
+    background: #f7b733;
+}
+
+.portrait-bubble-sasuke::before { background: #171b3d; clip-path: polygon(0 100%, 12% 20%, 38% 55%, 50% 0, 62% 52%, 83% 12%, 100% 100%); }
+.portrait-bubble-sakura::before { height: 62px; top: -25px; border-radius: 50%; background: #f28bb4; }
+.portrait-bubble-kiba::before { height: 46px; top: -22px; border-radius: 45% 45% 35% 35%; background: #b7bec8; }
+.portrait-bubble-hinata::before { height: 38px; top: -18px; border-radius: 50% 50% 35% 35%; background: #dce6f2; }
+.portrait-bubble-shino::before { height: 44px; top: -20px; border-radius: 55% 55% 35% 35%; background: #b39ddb; }
+.portrait-bubble-ino::before { height: 42px; top: -22px; border-radius: 55% 55% 35% 35%; background: #f7d358; }
+.portrait-bubble-naruto {
+    background: #f07818;
+    box-shadow: 0 0 0 8px rgba(54,169,255,0.14), 0 0 34px #36a9ff, 0 18px 35px rgba(0,0,0,0.55);
+}
+.portrait-bubble-sasuke {
+    background: #3949ab;
+    box-shadow: 0 0 0 8px rgba(223,251,255,0.14), 0 0 34px #dffbff, 0 18px 35px rgba(0,0,0,0.55);
+}
+.portrait-bubble-sakura {
+    background: #d9578b;
+    box-shadow: 0 0 0 8px rgba(156,255,87,0.14), 0 0 34px #9cff57, 0 18px 35px rgba(0,0,0,0.55);
+}
+.portrait-bubble-shikamaru { background: #27ae60; box-shadow: 0 0 0 8px rgba(39,174,96,0.14), 0 0 34px #27ae60, 0 18px 35px rgba(0,0,0,0.55); }
+.portrait-bubble-kiba { background: #dfe6e9; box-shadow: 0 0 0 8px rgba(184,193,204,0.14), 0 0 34px #dfe6e9, 0 18px 35px rgba(0,0,0,0.55); }
+.portrait-bubble-hinata { background: #c8d7ea; box-shadow: 0 0 0 8px rgba(122,184,255,0.14), 0 0 34px #7ab8ff, 0 18px 35px rgba(0,0,0,0.55); }
+.portrait-bubble-shino { background: #d8d6e1; box-shadow: 0 0 0 8px rgba(184,163,214,0.14), 0 0 34px #d8b4fe, 0 18px 35px rgba(0,0,0,0.55); }
+.portrait-bubble-ino { background: #9b59b6; box-shadow: 0 0 0 8px rgba(245,183,210,0.14), 0 0 34px #f5b7d2, 0 18px 35px rgba(0,0,0,0.55); }
+.portrait-bubble-choji { background: #d35400; box-shadow: 0 0 0 8px rgba(243,156,18,0.14), 0 0 34px #f39c12, 0 18px 35px rgba(0,0,0,0.55); }
+.portrait-bubble-empty { background: #3d4854; border-style: dashed; }
+
+.character-portrait strong {
+    color: #ffffff;
+    font-size: 24px;
+    letter-spacing: 2px;
+    font-weight: 900;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+}
+
+.portrait-special {
+    margin-top: 10px;
+    color: #edf4ff;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: none;
+    font-weight: 700;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+
+.portrait-special strong {
+    color: #fbc531;
+    font-size: 15px;
+    letter-spacing: 0;
+    font-weight: 900;
+}
+
+@keyframes selection-screen-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes panel-in {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes portrait-in {
+    from { opacity: 0; transform: translateY(35px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bubble-float {
+    0%, 100% { transform: translateY(0) rotate(-1deg); }
+    50% { transform: translateY(-10px) rotate(1deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .selection-layout,
+    .selection-panel,
+    .character-portrait,
+    .portrait-bubble {
+        animation: none;
+    }
 }
 
 .selector-container {
@@ -35,18 +198,145 @@ body {
 }
 
 .character-btn {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    color: white;
-    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    min-width: 170px;
+    padding: 11px 16px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-radius: 6px;
+    color: #ffffff;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.55);
     cursor: pointer;
-    transition: 0.2s;
+    text-align: left;
+    text-transform: uppercase;
+    transition: 0.2s ease;
+}
+
+.character-btn[data-character="naruto"] { background: linear-gradient(110deg, #f07818, #ff9f43) !important; --selection-glow: #36a9ff; }
+.character-btn[data-character="sasuke"] { background: linear-gradient(110deg, #283593, #536dfe) !important; --selection-glow: #dffbff; }
+.character-btn[data-character="sakura"] { background: linear-gradient(110deg, #c44578, #ec709e) !important; --selection-glow: #9cff57; }
+.character-btn[data-character="shikamaru"] { background: linear-gradient(110deg, #27ae60, #145a32) !important; --selection-glow: #7bed9f; }
+.character-btn[data-character="kiba"] { background: linear-gradient(110deg, #a4b0be, #dfe6e9) !important; --selection-glow: #dfe6e9; }
+.character-btn[data-character="hinata"] { background: linear-gradient(110deg, #a5b4c4, #dce6f2) !important; --selection-glow: #7ab8ff; }
+.character-btn[data-character="shino"] { background: linear-gradient(110deg, #a6a3b8, #d4d2df) !important; --selection-glow: #d8b4fe; }
+.character-btn[data-character="ino"] { background: linear-gradient(110deg, #9b59b6, #f5b7d2) !important; --selection-glow: #f5b7d2; }
+.character-btn[data-character="choji"] { background: linear-gradient(110deg, #d35400, #f39c12) !important; --selection-glow: #f39c12; }
+
+.character-btn:hover,
+.character-btn:focus-visible {
+    transform: translateX(5px);
+    border-color: rgba(255, 255, 255, 0.85);
+    outline: none;
 }
 
 .character-btn.selected {
-    border: 3px solid #fff;
-    transform: scale(1.05);
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.22), 0 0 20px var(--selection-glow);
+    transform: translateX(5px) scale(1.04);
+}
+
+.character-mark {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid rgba(255,255,255,0.8);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
+    box-shadow: inset 0 0 8px rgba(255,255,255,0.2);
+}
+
+.mark-naruto { color: #fff3b0; }
+.mark-sasuke { color: #dffbff; }
+.mark-sakura { color: #ffd6e6; }
+.mark-kiba { color: #dfe6e9; }
+.mark-hinata { color: #dce6f2; }
+.mark-shino { color: #d8b4fe; }
+
+.character-preview {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    margin-right: 0;
+    vertical-align: middle;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    opacity: 0;
+    transform: scale(0.4);
+    transition: 0.2s;
+}
+
+.character-btn:hover .character-preview,
+.character-btn:focus-visible .character-preview {
+    width: 28px;
+    height: 28px;
+    margin-right: 8px;
+    opacity: 1;
+    transform: scale(1);
+}
+
+.character-preview::before {
+    content: '';
+    display: block;
+    width: 18px;
+    height: 8px;
+    margin: -5px auto 0;
+    border-radius: 50% 50% 35% 35%;
+    background: #f7b733;
+}
+
+.character-preview-naruto {
+    background: #f07818;
+}
+
+.character-preview-sasuke {
+    background: #3949ab;
+}
+
+.character-preview-sakura {
+    background: #d9578b;
+}
+.character-preview-kiba { background: #dfe6e9; }
+.character-preview-kiba::before { background: #d63031; }
+.character-preview-hinata { background: #dce6f2; }
+.character-preview-hinata::before { background: #1f3a5f; }
+.character-preview-shino { background: #d8d6e1; }
+.character-preview-shino::before { background: #b39ddb; }
+.character-preview-ino { background: #9b59b6; }
+.character-preview-ino::before { background: #f7d358; }
+.character-preview-shikamaru { background: #27ae60; }
+.character-preview-choji { background: #d35400; }
+
+.character-preview-sasuke::before {
+    background: #171b3d;
+    clip-path: polygon(0 100%, 12% 20%, 38% 55%, 50% 0, 62% 52%, 83% 12%, 100% 100%);
+}
+
+.character-preview-sakura::before {
+    height: 12px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: #f28bb4;
+}
+
+@media (max-width: 760px) {
+    .selection-layout {
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        padding: 16px;
+    }
+
+    .selection-panel { grid-column: 1 / -1; grid-row: 1; }
+    .character-portrait { min-height: 220px; }
+    .portrait-bubble { width: 120px; border-width: 6px; }
+    .portrait-bubble::before { width: 80px; height: 30px; top: -17px; }
+    .portrait-bubble-sakura::before { height: 42px; top: -19px; }
 }
 
 #start-btn {

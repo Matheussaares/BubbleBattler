@@ -4,12 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bubble Battler</title>
-  <script type="module" crossorigin src="/assets/index-C9YAcXk4.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-7tSRpWNX.css">
+  <script type="module" crossorigin src="/assets/index-Bblwy_K9.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-Dct-r0SH.css">
 </head>
 <body>
     <div id="menu">
-        <h1>Bubble Battler</h1>
+        <div class="selection-layout">
+            <aside class="character-portrait portrait-p1" aria-live="polite">
+                <div class="portrait-label">Jogador 1</div>
+                <div id="p1-portrait-bubble" class="portrait-bubble portrait-bubble-empty" aria-hidden="true">?</div>
+                <strong id="p1-portrait-name">Escolha</strong>
+                <span class="portrait-special">Especial: <strong id="p1-portrait-special">-</strong></span>
+            </aside>
+
+            <main class="selection-panel">
+                <h1>Bubble Battler</h1>
+                <p class="selection-kicker">Escolha sua bubble</p>
         
         <div class="mode-selector" style="margin-bottom: 15px;">
             <label>Modo de Jogo: </label>
@@ -33,21 +43,42 @@
             <div class="player-column">
                 <h3 id="p1-title">Jogador 1 (WASD | Esp. 'E')</h3>
                 <div class="options">
-                    <button class="character-btn" data-player="1" data-character="naruto" style="background:#f07818">Naruto</button>
-                    <button class="character-btn" data-player="1" data-character="sasuke" style="background:#3949ab">Sasuke</button>
-                    <button class="character-btn" data-player="1" data-character="sakura" style="background:#d9578b">Sakura</button>
+                    <button class="character-btn" data-player="1" data-character="naruto" style="background:#f07818"><span class="character-preview character-preview-naruto" aria-hidden="true"></span><span class="character-mark mark-naruto" aria-hidden="true">✦</span>Naruto</button>
+                    <button class="character-btn" data-player="1" data-character="sasuke" style="background:#3949ab"><span class="character-preview character-preview-sasuke" aria-hidden="true"></span><span class="character-mark mark-sasuke" aria-hidden="true">◈</span>Sasuke</button>
+                    <button class="character-btn" data-player="1" data-character="sakura" style="background:#d9578b"><span class="character-preview character-preview-sakura" aria-hidden="true"></span><span class="character-mark mark-sakura" aria-hidden="true">✿</span>Sakura</button>
+                    <button class="character-btn" data-player="1" data-character="shikamaru"><span class="character-preview character-preview-shikamaru" aria-hidden="true"></span><span class="character-mark mark-shikamaru" aria-hidden="true">☾</span>Shikamaru</button>
+                    <button class="character-btn" data-player="1" data-character="kiba"><span class="character-preview character-preview-kiba" aria-hidden="true"></span><span class="character-mark mark-kiba" aria-hidden="true">◎</span>Kiba</button>
+                    <button class="character-btn" data-player="1" data-character="hinata"><span class="character-preview character-preview-hinata" aria-hidden="true"></span><span class="character-mark mark-hinata" aria-hidden="true">◉</span>Hinata</button>
+                    <button class="character-btn" data-player="1" data-character="shino"><span class="character-preview character-preview-shino" aria-hidden="true"></span><span class="character-mark mark-shino" aria-hidden="true">✧</span>Shino</button>
+                    <button class="character-btn" data-player="1" data-character="ino"><span class="character-preview character-preview-ino" aria-hidden="true"></span><span class="character-mark mark-ino" aria-hidden="true">✿</span>Ino</button>
+                    <button class="character-btn" data-player="1" data-character="choji"><span class="character-preview character-preview-choji" aria-hidden="true"></span><span class="character-mark mark-choji" aria-hidden="true">●</span>Choji</button>
                 </div>
             </div>
             <div class="player-column" id="p2-column">
                 <h3 id="p2-title">Jogador 2 (Setas | Esp. 'Shift')</h3>
                 <div class="options">
-                    <button class="character-btn" data-player="2" data-character="naruto" style="background:#f07818">Naruto</button>
-                    <button class="character-btn" data-player="2" data-character="sasuke" style="background:#3949ab">Sasuke</button>
-                    <button class="character-btn" data-player="2" data-character="sakura" style="background:#d9578b">Sakura</button>
+                    <button class="character-btn" data-player="2" data-character="naruto" style="background:#f07818"><span class="character-preview character-preview-naruto" aria-hidden="true"></span><span class="character-mark mark-naruto" aria-hidden="true">✦</span>Naruto</button>
+                    <button class="character-btn" data-player="2" data-character="sasuke" style="background:#3949ab"><span class="character-preview character-preview-sasuke" aria-hidden="true"></span><span class="character-mark mark-sasuke" aria-hidden="true">◈</span>Sasuke</button>
+                    <button class="character-btn" data-player="2" data-character="sakura" style="background:#d9578b"><span class="character-preview character-preview-sakura" aria-hidden="true"></span><span class="character-mark mark-sakura" aria-hidden="true">✿</span>Sakura</button>
+                    <button class="character-btn" data-player="2" data-character="shikamaru"><span class="character-preview character-preview-shikamaru" aria-hidden="true"></span><span class="character-mark mark-shikamaru" aria-hidden="true">☾</span>Shikamaru</button>
+                    <button class="character-btn" data-player="2" data-character="kiba"><span class="character-preview character-preview-kiba" aria-hidden="true"></span><span class="character-mark mark-kiba" aria-hidden="true">◎</span>Kiba</button>
+                    <button class="character-btn" data-player="2" data-character="hinata"><span class="character-preview character-preview-hinata" aria-hidden="true"></span><span class="character-mark mark-hinata" aria-hidden="true">◉</span>Hinata</button>
+                    <button class="character-btn" data-player="2" data-character="shino"><span class="character-preview character-preview-shino" aria-hidden="true"></span><span class="character-mark mark-shino" aria-hidden="true">✧</span>Shino</button>
+                    <button class="character-btn" data-player="2" data-character="ino"><span class="character-preview character-preview-ino" aria-hidden="true"></span><span class="character-mark mark-ino" aria-hidden="true">✿</span>Ino</button>
+                    <button class="character-btn" data-player="2" data-character="choji"><span class="character-preview character-preview-choji" aria-hidden="true"></span><span class="character-mark mark-choji" aria-hidden="true">●</span>Choji</button>
                 </div>
             </div>
         </div>
-        <button id="start-btn" disabled>Iniciar Batalha</button>
+                <button id="start-btn" disabled>Iniciar Batalha</button>
+            </main>
+
+            <aside class="character-portrait portrait-p2" aria-live="polite">
+                <div class="portrait-label">Jogador 2</div>
+                <div id="p2-portrait-bubble" class="portrait-bubble portrait-bubble-empty" aria-hidden="true">?</div>
+                <strong id="p2-portrait-name">Escolha</strong>
+                <span class="portrait-special">Especial: <strong id="p2-portrait-special">-</strong></span>
+            </aside>
+        </div>
     </div>
 
     <div id="game-container" class="hidden">

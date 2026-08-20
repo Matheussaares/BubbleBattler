@@ -4,11 +4,23 @@ import { GAME_CONFIG } from './config.js';
 import { narutoData, drawRasengan } from './characters/naruto/naruto.js';
 import { sasukeData, drawChidori } from './characters/sasuke/sasuke.js';
 import { sakuraData } from './characters/sakura/sakura.js';
+import { shikamaruData, drawShadow, getShadowPathLength } from './characters/shikamaru/shikamaru.js';
+import { kibaData, drawKibaRush } from './characters/kiba/kiba.js';
+import { hinataData, drawHinataRotation } from './characters/hinata/hinata.js';
+import { shinoData, drawShinoBeetles } from './characters/shino/shino.js';
+import { inoData, drawPoisonRose } from './characters/ino/ino.js';
+import { chojiData, drawChojiCharge } from './characters/choji/choji.js';
 
 const characterData = {
     naruto: narutoData,
     sasuke: sasukeData,
-    sakura: sakuraData
+    sakura: sakuraData,
+    shikamaru: shikamaruData,
+    kiba: kibaData,
+    hinata: hinataData,
+    shino: shinoData,
+    ino: inoData,
+    choji: chojiData
 };
 const characters = Object.keys(characterData);
 let p1Selection = null;
@@ -24,6 +36,7 @@ let p2;
 let gems = [];
 let obstacles = [];
 let particles = [];
+let projectiles = [];
 let animationFrameCount = 0;
 let gemSpawnTimer = 0;
 let obstacleCycleTimer = 0;
@@ -67,7 +80,8 @@ document.querySelectorAll('.character-btn').forEach(button => {
         if (player === '1') p1Selection = character;
         else p2Selection = character;
         if (gameMode !== 'pvp' && player === '1' && p1Selection) {
-            p2Selection = characters.filter(item => item !== p1Selection)[Math.floor(Math.random() * 2)];
+            const availableCharacters = characters.filter(item => item !== p1Selection);
+            p2Selection = availableCharacters[Math.floor(Math.random() * availableCharacters.length)];
             updateCharacterSelection(2, p2Selection);
         }
         if (gameMode !== 'pvp') {
@@ -75,13 +89,32 @@ document.querySelectorAll('.character-btn').forEach(button => {
         } else {
             startButton.disabled = !(p1Selection && p2Selection);
         }
+        updatePortraits();
     });
 });
+
+function updatePortraits() {
+    updatePortrait(1, p1Selection);
+    updatePortrait(2, p2Selection);
+}
+
+function updatePortrait(player, character) {
+    const bubble = document.getElementById(`p${player}-portrait-bubble`);
+    const name = document.getElementById(`p${player}-portrait-name`);
+    const special = document.getElementById(`p${player}-portrait-special`);
+    bubble.className = `portrait-bubble ${character ? `portrait-bubble-${character}` : 'portrait-bubble-empty'}`;
+    bubble.textContent = character ? '' : '?';
+    name.textContent = character ? characterData[character].name : 'Escolha';
+    special.textContent = character ? characterData[character].special : '-';
+}
 
 function updateCharacterSelection(player, character) {
     document.querySelectorAll(`.character-btn[data-player="${player}"]`).forEach(button => {
         button.classList.toggle('selected', button.getAttribute('data-character') === character);
     });
+    if (player === 1) p1Selection = character;
+    else p2Selection = character;
+    updatePortraits();
 }
 
 document.getElementById('start-btn').addEventListener('click', () => {
@@ -100,12 +133,13 @@ function initGame() {
     gameOver = false;
     gems = [];
     particles = [];
+    projectiles = [];
     animationFrameCount = 0;
     gemSpawnTimer = 0;
     p1 = createPlayer(200, 300, p1Selection, 3, 2);
     p2 = createPlayer(600, 300, p2Selection, -3, -2);
     obstacles = createObstacles();
-    obstacleCycleTimer = 120 + Math.floor(Math.random() * 61);
+    obstacleCycleTimer = 300 + Math.floor(Math.random() * 121);
     obstacleRespawnDelay = 0;
     spawnGem(p1.x - 90, p1.y);
     spawnGem(p2.x + 90, p2.y);
@@ -123,7 +157,7 @@ function initGame() {
 }
 
 function createPlayer(x, y, character, vx, vy) {
-    return { x, y, radius: GAME_CONFIG.PLAYER_RADIUS, hp: GAME_CONFIG.INITIAL_HP, gems: 0, character, ...characterData[character], vx, vy, specialActive: false, specialTimer: 0, specialDashTimer: 0, attackCooldown: 0, aiDecisionTimer: 0, aiAttackTimer: 70, aiGemFocusTimer: 0, aiStrafeDirection: 1 };
+    return { x, y, radius: GAME_CONFIG.PLAYER_RADIUS, baseRadius: GAME_CONFIG.PLAYER_RADIUS, hp: GAME_CONFIG.INITIAL_HP, gems: 0, character, ...characterData[character], vx, vy, specialActive: false, specialTimer: 0, specialDashTimer: 0, shadowProgress: 0, movementSlowTimer: 0, attackCooldown: 0, kunaiCooldown: 0, poisonTimer: 0, poisonTickTimer: 0, aiDecisionTimer: 0, aiAttackTimer: 70, aiGemFocusTimer: 0, aiStrafeDirection: 1 };
 }
 
 function togglePause() {
@@ -152,8 +186,29 @@ function handleKeyUp(event) { keys[event.key] = false; }
 function activateSpecial(player) {
     player.gems = 0;
     player.specialActive = true;
-    player.specialTimer = player.character === 'sakura' ? GAME_CONFIG.SAKURA_SPECIAL_DURATION : GAME_CONFIG.SPECIAL_DURATION;
-    player.specialDashTimer = player.character === 'sakura' ? 0 : 22;
+    player.specialHit = false;
+    player.shadowProgress = 0;
+    player.specialTimer = player.character === 'sakura' ? GAME_CONFIG.SAKURA_SPECIAL_DURATION : player.character === 'choji' ? GAME_CONFIG.CHOJI_SPECIAL_DURATION : GAME_CONFIG.SPECIAL_DURATION;
+    player.specialDashTimer = ['sakura', 'shikamaru', 'ino', 'kiba', 'hinata', 'shino'].includes(player.character) ? 0 : 22;
+    if (player.character === 'choji') player.radius = player.baseRadius * GAME_CONFIG.CHOJI_RADIUS_MULTIPLIER;
+    if (player.character === 'ino') projectiles.push({ owner: player, type: player.character, x: player.x, y: player.y, speed: 8, life: 180 });
+    if (player.character === 'shino') {
+        const target = player === p1 ? p2 : p1;
+        const angle = Math.atan2(target.y - player.y, target.x - player.x);
+        for (let beetle = 0; beetle < 3; beetle++) {
+            const lateralOffset = (beetle - 1) * 12;
+            projectiles.push({
+                owner: player,
+                type: player.character,
+                x: player.x + Math.cos(angle) * (player.radius + 9) - Math.sin(angle) * lateralOffset,
+                y: player.y + Math.sin(angle) * (player.radius + 9) + Math.cos(angle) * lateralOffset,
+                speed: GAME_CONFIG.SHINO_PROJECTILE_SPEED,
+                life: GAME_CONFIG.SHINO_PROJECTILE_LIFE,
+                direction: angle,
+                radius: 8
+            });
+        }
+    }
     createExplosion(player.x, player.y, player.accent, player.character === 'sakura' ? 10 : 5);
 }
 function createExplosion(x, y, color, amount = 8) {
@@ -230,7 +285,7 @@ function update() {
     if (obstacleRespawnDelay === 0 && obstacles.length === 0) {
         obstacles = createObstacles();
         moveBlockedGems();
-        obstacleCycleTimer = 120 + Math.floor(Math.random() * 61);
+        obstacleCycleTimer = 300 + Math.floor(Math.random() * 121);
     }
     if (gemSpawnTimer > 150 && gems.length < 2) {
         spawnGemPair();
@@ -266,8 +321,11 @@ function update() {
     if (gameMode === 'ai-ai' && p1.gems >= 3 && !p1.specialActive) activateSpecial(p1);
     updateSpecial(p1);
     updateSpecial(p2);
+    updateProjectiles();
     p1.attackCooldown = Math.max(0, p1.attackCooldown - 1);
     p2.attackCooldown = Math.max(0, p2.attackCooldown - 1);
+    p1.kunaiCooldown = Math.max(0, p1.kunaiCooldown - 1);
+    p2.kunaiCooldown = Math.max(0, p2.kunaiCooldown - 1);
     movePlayer(p1, p1Ax, p1Ay);
     movePlayer(p2, p2Ax, p2Ay);
     resolveObstacleCollision(p1);
@@ -323,21 +381,23 @@ function getAiMove(player, opponent, speed) {
     }
 
     player.aiGemFocusTimer = Math.max(0, player.aiGemFocusTimer - 1);
-    if (player.aiGemFocusTimer > 0 && player.gems < 3 && gems.length) {
-        const gem = gems.reduce((closest, item) => Math.hypot(player.x - item.x, player.y - item.y) < Math.hypot(player.x - closest.x, player.y - closest.y) ? item : closest);
-        x = gem.x - player.x;
-        y = gem.y - player.y;
-    } else if (opponent.specialActive && opponent.character !== 'sakura' && distance < 250) {
+    const opponentSpecialRange = opponent.specialActive && opponent.character !== 'sakura' && distance < 250;
+    const shouldCollect = player.gems < 3 && gems.length > 0;
+    if (opponentSpecialRange) {
         const awayX = player.x - opponent.x;
         const awayY = player.y - opponent.y;
         const perpendicularX = -awayY * player.aiStrafeDirection;
         const perpendicularY = awayX * player.aiStrafeDirection;
-        x = awayX * 0.72 + perpendicularX * 0.28;
-        y = awayY * 0.72 + perpendicularY * 0.28;
+        x = awayX * 0.82 + perpendicularX * 0.42;
+        y = awayY * 0.82 + perpendicularY * 0.42;
+    } else if (player.aiGemFocusTimer > 0 && shouldCollect) {
+        const gem = gems.reduce((closest, item) => Math.hypot(player.x - item.x, player.y - item.y) < Math.hypot(player.x - closest.x, player.y - closest.y) ? item : closest);
+        x = gem.x - player.x;
+        y = gem.y - player.y;
     } else if (player.specialActive) {
         x = opponent.x - player.x;
         y = opponent.y - player.y;
-    } else if (player.gems < 3 && gems.length) {
+    } else if (shouldCollect && (distance > 210 || player.gems < 2)) {
         const gem = gems.reduce((closest, item) => Math.hypot(player.x - item.x, player.y - item.y) < Math.hypot(player.x - closest.x, player.y - closest.y) ? item : closest);
         x = gem.x - player.x;
         y = gem.y - player.y;
@@ -347,7 +407,7 @@ function getAiMove(player, opponent, speed) {
         const isAttacking = player.aiAttackTimer > 25;
         const perpendicularX = -y * player.aiStrafeDirection;
         const perpendicularY = x * player.aiStrafeDirection;
-        const approachWeight = isAttacking ? 0.9 : 0.2;
+        const approachWeight = isAttacking ? 0.78 : -0.55;
         x = x * approachWeight + perpendicularX * (1 - approachWeight);
         y = y * approachWeight + perpendicularY * (1 - approachWeight);
     } else if (distance < 145) {
@@ -360,20 +420,95 @@ function getAiMove(player, opponent, speed) {
     return { x: x / length * movementSpeed, y: y / length * movementSpeed };
 }
 function updateSpecial(player) {
-    if (!player.specialActive) return;
-    player.specialTimer--;
-    player.specialDashTimer = Math.max(0, player.specialDashTimer - 1);
-    if (player.character === 'sakura' && player.specialTimer % 15 === 0) {
+    if (player.specialActive) {
+        player.specialTimer--;
+        player.specialDashTimer = Math.max(0, player.specialDashTimer - 1);
+    }
+    if (player.specialActive && player.character === 'sakura' && player.specialTimer % 15 === 0) {
         player.hp = Math.min(GAME_CONFIG.INITIAL_HP, player.hp + GAME_CONFIG.SAKURA_HEAL_AMOUNT);
         createExplosion(player.x, player.y, player.accent, 3);
     }
-    if (player.specialTimer <= 0) player.specialActive = false;
+    if (player.specialActive && player.character === 'shikamaru' && !player.specialHit) {
+        const target = player === p1 ? p2 : p1;
+        const pathLength = getShadowPathLength(player, target, obstacles);
+        player.shadowProgress = Math.min(1, player.shadowProgress + GAME_CONFIG.SHADOW_TRAVEL_SPEED / pathLength);
+        if (player.shadowProgress >= 1) {
+            if (!isHinataDefending(target)) {
+                target.hp -= GAME_CONFIG.SHIKAMARU_SPECIAL_DAMAGE;
+                target.movementSlowTimer = GAME_CONFIG.SHIKAMARU_SLOW_DURATION;
+            }
+            player.specialHit = true;
+            createExplosion(target.x, target.y, player.accent, 8);
+        }
+    }
+    if (player.poisonTimer > 0) {
+        player.poisonTimer--; player.poisonTickTimer--;
+        if (player.poisonTickTimer <= 0) { player.hp -= GAME_CONFIG.INO_POISON_DAMAGE; player.poisonTickTimer = GAME_CONFIG.POISON_TICK_INTERVAL; createExplosion(player.x, player.y, '#9b59b6', 3); }
+    }
+    if (player.movementSlowTimer > 0) {
+        player.movementSlowTimer--;
+    }
+    if (player.specialActive && player.specialTimer <= 0) {
+        player.specialActive = false;
+        restoreChojiState(player);
+    }
+}
+function restoreChojiState(player) {
+    if (player.character !== 'choji') return;
+    player.radius = player.baseRadius;
+    const speed = Math.hypot(player.vx, player.vy);
+    if (speed > player.speed) {
+        player.vx = player.vx / speed * player.speed;
+        player.vy = player.vy / speed * player.speed;
+    }
+}
+function isHinataDefending(player) {
+    return player.character === 'hinata' && player.specialActive;
+}
+function updateProjectiles() {
+    projectiles.forEach((projectile, index) => {
+        const target = projectile.owner === p1 ? p2 : p1;
+        const angle = Math.atan2(target.y - projectile.y, target.x - projectile.x);
+        projectile.life = Math.max(0, (projectile.life ?? 0) - 1);
+        if (projectile.type === 'shino') {
+            let turn = angle - projectile.direction;
+            if (turn > Math.PI) turn -= Math.PI * 2;
+            if (turn < -Math.PI) turn += Math.PI * 2;
+            projectile.direction += Math.max(-GAME_CONFIG.SHINO_PROJECTILE_TURN_RATE, Math.min(GAME_CONFIG.SHINO_PROJECTILE_TURN_RATE, turn));
+            projectile.x += Math.cos(projectile.direction) * projectile.speed;
+            projectile.y += Math.sin(projectile.direction) * projectile.speed;
+        } else {
+            projectile.x += Math.cos(angle) * projectile.speed; projectile.y += Math.sin(angle) * projectile.speed;
+        }
+        if (projectile.life <= 0) {
+            projectiles.splice(index, 1);
+            return;
+        }
+        if (Math.hypot(target.x - projectile.x, target.y - projectile.y) > target.radius + 12) return;
+        if (isHinataDefending(target)) {
+            projectile.owner.specialActive = false;
+            projectiles.splice(index, 1);
+            createExplosion(target.x, target.y, target.accent, 4);
+            return;
+        }
+        if (projectile.type === 'shikamaru') { target.hp -= GAME_CONFIG.SHIKAMARU_SPECIAL_DAMAGE; }
+        else if (projectile.type === 'shino') { target.hp -= GAME_CONFIG.SHINO_SPECIAL_DAMAGE / 3; }
+        else { target.poisonTimer = GAME_CONFIG.POISON_DURATION; target.poisonTickTimer = GAME_CONFIG.POISON_TICK_INTERVAL; }
+        projectile.owner.specialActive = false; createExplosion(target.x, target.y, projectile.owner.accent, 12); projectiles.splice(index, 1);
+    });
+}
+
+function applyMovementSlow(player, multiplier) {
+    if (player.movementSlowTimer > 0 && !player.specialActive) {
+        return multiplier * GAME_CONFIG.SHIKAMARU_SLOW_FACTOR;
+    }
+    return multiplier;
 }
 function movePlayer(player, ax, ay) {
     if (['naruto', 'sasuke'].includes(player.character) && player.specialActive) {
         const target = player === p1 ? p2 : p1;
         const angle = Math.atan2(target.y - player.y, target.x - player.x);
-        const dashForce = player.specialDashTimer > 0 ? 2.1 : 0.85;
+        const dashForce = player.specialDashTimer > 0 ? 2.1 : 0.9;
         ax += Math.cos(angle) * dashForce;
         ay += Math.sin(angle) * dashForce;
     }
@@ -381,7 +516,10 @@ function movePlayer(player, ax, ay) {
     player.vx += ax;
     player.vy += ay;
     const speed = Math.hypot(player.vx, player.vy);
-    const maxSpeed = player.speed * (player.specialActive && player.character !== 'sakura' ? 1.45 : 1);
+    let maxSpeed = player.speed * (player.specialActive && player.character === 'choji' ? GAME_CONFIG.CHOJI_SPEED_MULTIPLIER : player.specialActive && player.character !== 'sakura' ? 1.45 : 1);
+    if (player.movementSlowTimer > 0) {
+        maxSpeed *= GAME_CONFIG.SHIKAMARU_SLOW_FACTOR;
+    }
     if (speed > maxSpeed) { player.vx = player.vx / speed * maxSpeed; player.vy = player.vy / speed * maxSpeed; }
     player.x += player.vx;
     player.y += player.vy;
@@ -398,60 +536,109 @@ function collectGems() {
     });
 }
 function collidePlayers() {
-    const distance = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-    if (distance >= p1.radius + p2.radius) return;
-    const p1Offensive = p1.specialActive && p1.character !== 'sakura';
-    const p2Offensive = p2.specialActive && p2.character !== 'sakura';
-    const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-    const normalX = Math.cos(angle);
-    const normalY = Math.sin(angle);
-    const overlap = p1.radius + p2.radius - distance;
-    const separation = overlap * 0.5 + 4;
+    const deltaX = p2.x - p1.x;
+    const deltaY = p2.y - p1.y;
+    const distance = Math.hypot(deltaX, deltaY);
+    const minimumDistance = p1.radius + p2.radius;
+    const p1Defending = isHinataDefending(p1);
+    const p2Defending = isHinataDefending(p2);
+    if (p1Defending && distance < minimumDistance + 12 && p1.attackCooldown <= 0 && !p2Defending) {
+        p2.hp -= GAME_CONFIG.HINATA_SPECIAL_DAMAGE;
+        p1.attackCooldown = 20;
+        createExplosion(p2.x, p2.y, p1.accent, 8);
+    }
+    if (p2Defending && distance < minimumDistance + 12 && p2.attackCooldown <= 0 && !p1Defending) {
+        p1.hp -= GAME_CONFIG.HINATA_SPECIAL_DAMAGE;
+        p2.attackCooldown = 20;
+        createExplosion(p1.x, p1.y, p2.accent, 8);
+    }
+    if (distance >= minimumDistance) return;
+    if (p1.kunaiCooldown <= 0 || p2.kunaiCooldown <= 0) {
+        if (!p1Defending) p1.hp -= GAME_CONFIG.KUNAI_DAMAGE;
+        if (!p2Defending) p2.hp -= GAME_CONFIG.KUNAI_DAMAGE;
+        p1.kunaiCooldown = 34; p2.kunaiCooldown = 34;
+        createKunaiBurst((p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+    }
+    const p1Offensive = p1.specialActive && ['naruto', 'sasuke', 'kiba', 'hinata', 'shino', 'choji'].includes(p1.character);
+    const p2Offensive = p2.specialActive && ['naruto', 'sasuke', 'kiba', 'hinata', 'shino', 'choji'].includes(p2.character);
+    const normalX = distance > 0.0001 ? deltaX / distance : 1;
+    const normalY = distance > 0.0001 ? deltaY / distance : 0;
+    const overlap = minimumDistance - distance;
+    const separation = overlap * 0.5 + 0.75;
     p1.x -= normalX * separation; p1.y -= normalY * separation;
     p2.x += normalX * separation; p2.y += normalY * separation;
+    p1.x = Math.max(p1.radius, Math.min(canvas.width - p1.radius, p1.x));
+    p1.y = Math.max(p1.radius, Math.min(canvas.height - p1.radius, p1.y));
+    p2.x = Math.max(p2.radius, Math.min(canvas.width - p2.radius, p2.x));
+    p2.y = Math.max(p2.radius, Math.min(canvas.height - p2.radius, p2.y));
     const relativeVelocity = (p2.vx - p1.vx) * normalX + (p2.vy - p1.vy) * normalY;
-    const bounceImpulse = Math.max(1.7, Math.min(3.1, Math.abs(relativeVelocity) * 0.7 + 1.4));
-    p1.vx = p1.vx * 0.58 - normalX * bounceImpulse;
-    p1.vy = p1.vy * 0.58 - normalY * bounceImpulse;
-    p2.vx = p2.vx * 0.58 + normalX * bounceImpulse;
-    p2.vy = p2.vy * 0.58 + normalY * bounceImpulse;
+    if (relativeVelocity < 0) {
+        const restitution = 0.82;
+        const impulse = -(1 + restitution) * relativeVelocity * 0.5;
+        p1.vx -= normalX * impulse; p1.vy -= normalY * impulse;
+        p2.vx += normalX * impulse; p2.vy += normalY * impulse;
+    }
+    const escapeImpulse = 0.55;
+    p1.vx -= normalX * escapeImpulse; p1.vy -= normalY * escapeImpulse;
+    p2.vx += normalX * escapeImpulse; p2.vy += normalY * escapeImpulse;
     p1.aiGemFocusTimer = 60;
     p2.aiGemFocusTimer = 60;
     p1.aiDecisionTimer = 0;
     p2.aiDecisionTimer = 0;
     if (p1Offensive && p2Offensive) {
-        p1.hp -= GAME_CONFIG.CONTACT_DAMAGE * 6;
-        p2.hp -= GAME_CONFIG.CONTACT_DAMAGE * 6;
+        if (!p1Defending) p1.hp -= GAME_CONFIG.CONTACT_DAMAGE * 6;
+        if (!p2Defending) p2.hp -= GAME_CONFIG.CONTACT_DAMAGE * 6;
         p1.specialActive = false;
         p2.specialActive = false;
+        restoreChojiState(p1);
+        restoreChojiState(p2);
         createExplosion((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, '#ffffff', 18);
         return;
     }
     if (p1Offensive) {
-        p2.hp -= p1.character === 'naruto' ? GAME_CONFIG.NARUTO_SPECIAL_DAMAGE : GAME_CONFIG.SASUKE_SPECIAL_DAMAGE;
+        const damageByCharacter = {
+            naruto: GAME_CONFIG.NARUTO_SPECIAL_DAMAGE,
+            sasuke: GAME_CONFIG.SASUKE_SPECIAL_DAMAGE,
+            kiba: GAME_CONFIG.KIBA_SPECIAL_DAMAGE,
+            hinata: GAME_CONFIG.HINATA_SPECIAL_DAMAGE,
+            shino: GAME_CONFIG.SHINO_SPECIAL_DAMAGE,
+            choji: GAME_CONFIG.CHOJI_SPECIAL_DAMAGE
+        };
+        if (!p2Defending) p2.hp -= damageByCharacter[p1.character] ?? GAME_CONFIG.CONTACT_DAMAGE * 2;
         p1.specialActive = false;
+        restoreChojiState(p1);
         p1.attackCooldown = 20;
         createExplosion(p2.x, p2.y, p1.accent, 14);
         return;
     }
     if (p2Offensive) {
-        p1.hp -= p2.character === 'naruto' ? GAME_CONFIG.NARUTO_SPECIAL_DAMAGE : GAME_CONFIG.SASUKE_SPECIAL_DAMAGE;
+        const damageByCharacter = {
+            naruto: GAME_CONFIG.NARUTO_SPECIAL_DAMAGE,
+            sasuke: GAME_CONFIG.SASUKE_SPECIAL_DAMAGE,
+            kiba: GAME_CONFIG.KIBA_SPECIAL_DAMAGE,
+            hinata: GAME_CONFIG.HINATA_SPECIAL_DAMAGE,
+            shino: GAME_CONFIG.SHINO_SPECIAL_DAMAGE,
+            choji: GAME_CONFIG.CHOJI_SPECIAL_DAMAGE
+        };
+        if (!p1Defending) p1.hp -= damageByCharacter[p2.character] ?? GAME_CONFIG.CONTACT_DAMAGE * 2;
         p2.specialActive = false;
+        restoreChojiState(p2);
         p2.attackCooldown = 20;
         createExplosion(p1.x, p1.y, p2.accent, 14);
         return;
     }
     if (p1.attackCooldown <= 0) {
-            p2.hp -= GAME_CONFIG.CONTACT_DAMAGE;
+            if (!p2Defending) p2.hp -= GAME_CONFIG.CONTACT_DAMAGE;
             p1.attackCooldown = 34;
             createExplosion(p2.x, p2.y, p1.accent, 5);
     }
     if (p2.attackCooldown <= 0) {
-            p1.hp -= GAME_CONFIG.CONTACT_DAMAGE;
+            if (!p1Defending) p1.hp -= GAME_CONFIG.CONTACT_DAMAGE;
             p2.attackCooldown = 34;
             createExplosion(p1.x, p1.y, p2.accent, 5);
     }
 }
+function createKunaiBurst(x, y) { particles.push({ x, y, vx: 0, vy: 0, radius: 0, color: '#d5dde7', alpha: 1, kunai: true, life: 1 }); }
 function updateHud() {
     document.getElementById('p1-hp').innerText = Math.max(0, Math.ceil(p1.hp));
     document.getElementById('p1-gems').innerText = p1.gems;
@@ -484,7 +671,24 @@ function draw() {
         ctx.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
     });
     gems.forEach(gem => { ctx.beginPath(); ctx.arc(gem.x, gem.y, gem.radius + Math.sin(animationFrameCount * 0.2) * 2, 0, Math.PI * 2); ctx.fillStyle = '#fbc531'; ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.stroke(); });
-    particles.forEach(particle => { ctx.globalAlpha = particle.alpha; ctx.beginPath(); ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2); ctx.fillStyle = particle.color; ctx.fill(); ctx.globalAlpha = 1; });
+    particles.forEach(particle => {
+        ctx.globalAlpha = particle.alpha;
+        if (particle.kunai) {
+            ctx.save(); ctx.translate(particle.x, particle.y); ctx.strokeStyle = '#ecf0f1'; ctx.lineWidth = 4;
+            ctx.rotate(Math.PI / 4); ctx.beginPath(); ctx.moveTo(-23, 0); ctx.lineTo(23, 0); ctx.moveTo(0, -23); ctx.lineTo(0, 23); ctx.stroke();
+            ctx.strokeStyle = '#7f8c8d'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-17, -5); ctx.lineTo(-23, 0); ctx.lineTo(-17, 5); ctx.moveTo(17, -5); ctx.lineTo(23, 0); ctx.lineTo(17, 5); ctx.stroke(); ctx.restore();
+        } else { ctx.beginPath(); ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2); ctx.fillStyle = particle.color; ctx.fill(); }
+        ctx.globalAlpha = 1;
+    });
+    projectiles.forEach(projectile => {
+        if (projectile.type === 'shino') return;
+        ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.arc(projectile.x, projectile.y, projectile.type === 'shino' ? 8 : 9, 0, Math.PI * 2);
+        ctx.fillStyle = projectile.type === 'shikamaru' ? '#050505' : projectile.type === 'shino' ? '#7c3aed' : '#f5b7d2'; ctx.fill();
+        ctx.strokeStyle = projectile.type === 'shikamaru' ? '#27ae60' : projectile.type === 'shino' ? '#4c1d95' : '#7d3c98'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.globalAlpha = 1;
+    });
+    drawShinoBeetles(ctx, projectiles);
     drawPlayer(p1); drawPlayer(p2);
 }
 function drawPlayer(player) {
@@ -497,23 +701,51 @@ function drawPlayer(player) {
     ctx.fillStyle = player.color; ctx.strokeStyle = player.specialActive ? player.accent : '#ffffff'; ctx.lineWidth = player.specialActive ? 5 : 4;
     ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     drawHair(player);
+    drawFaceDetails(player);
     if (player.specialActive && player.character === 'naruto') drawRasengan(ctx, player, player === p1 ? p2 : p1, animationFrameCount);
     if (player.specialActive && player.character === 'sasuke') drawChidori(ctx, player, player === p1 ? p2 : p1, animationFrameCount);
-    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(player.name, player.x, player.y - 3); ctx.font = 'bold 14px Arial'; ctx.fillText(Math.max(0, Math.ceil(player.hp)), player.x, player.y + 13);
+    if (player.specialActive && player.character === 'kiba') drawKibaRush(ctx, player, player === p1 ? p2 : p1, animationFrameCount);
+    if (player.specialActive && player.character === 'hinata') drawHinataRotation(ctx, player, player === p1 ? p2 : p1, animationFrameCount);
+    if (player.specialActive && player.character === 'shikamaru') drawShadow(ctx, player, player === p1 ? p2 : p1, animationFrameCount, obstacles);
+    if (player.specialActive && player.character === 'ino') drawPoisonRose(ctx, player, player === p1 ? p2 : p1, animationFrameCount);
+    if (player.specialActive && player.character === 'choji') drawChojiCharge(ctx, player, animationFrameCount);
+    ctx.fillStyle = '#0c1117'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeText(player.name, player.x, player.y - 3); ctx.fillText(player.name, player.x, player.y - 3); ctx.font = 'bold 14px Arial'; ctx.strokeText(Math.max(0, Math.ceil(player.hp)), player.x, player.y + 13); ctx.fillText(Math.max(0, Math.ceil(player.hp)), player.x, player.y + 13);
     ctx.restore();
 }
 function drawHair(player) {
     ctx.save();
-    ctx.fillStyle = player.character === 'naruto' ? '#f7b733' : player.character === 'sasuke' ? '#171b3d' : '#f28bb4';
-    ctx.strokeStyle = player.character === 'naruto' ? '#d88716' : player.character === 'sasuke' ? '#080b20' : '#b94377';
+    ctx.fillStyle = player.character === 'naruto' ? '#f7b733' : player.character === 'sasuke' ? '#171b3d' : player.character === 'sakura' ? '#f28bb4' : player.character === 'shikamaru' ? '#145a32' : player.character === 'kiba' ? '#1d2126' : player.character === 'hinata' ? '#6e7f9d' : player.character === 'shino' ? '#1f2430' : player.character === 'ino' ? '#f7d358' : '#8e3b00';
+    ctx.strokeStyle = player.character === 'naruto' ? '#d88716' : player.character === 'sasuke' ? '#080b20' : player.character === 'sakura' ? '#b94377' : player.character === 'shikamaru' ? '#0b3d21' : player.character === 'kiba' ? '#080b0d' : player.character === 'hinata' ? '#485c78' : player.character === 'shino' ? '#0d1117' : player.character === 'ino' ? '#c49a00' : '#5d2600';
     ctx.lineWidth = 2;
     ctx.beginPath();
     if (player.character === 'naruto') {
         ctx.moveTo(player.x - 29, player.y - 5); ctx.lineTo(player.x - 25, player.y - 26); ctx.lineTo(player.x - 15, player.y - 19); ctx.lineTo(player.x - 10, player.y - 34); ctx.lineTo(player.x - 1, player.y - 21); ctx.lineTo(player.x + 9, player.y - 35); ctx.lineTo(player.x + 13, player.y - 19); ctx.lineTo(player.x + 26, player.y - 28); ctx.lineTo(player.x + 24, player.y - 7);
     } else if (player.character === 'sasuke') {
         ctx.moveTo(player.x - 30, player.y - 1); ctx.lineTo(player.x - 26, player.y - 22); ctx.lineTo(player.x - 12, player.y - 17); ctx.lineTo(player.x - 7, player.y - 35); ctx.lineTo(player.x + 2, player.y - 20); ctx.lineTo(player.x + 14, player.y - 32); ctx.lineTo(player.x + 15, player.y - 17); ctx.lineTo(player.x + 29, player.y - 20); ctx.lineTo(player.x + 25, player.y + 1);
+    } else if (player.character === 'kiba') {
+        ctx.moveTo(player.x - 28, player.y - 4); ctx.lineTo(player.x - 23, player.y - 23); ctx.lineTo(player.x - 12, player.y - 20); ctx.lineTo(player.x - 5, player.y - 34); ctx.lineTo(player.x + 7, player.y - 21); ctx.lineTo(player.x + 20, player.y - 27); ctx.lineTo(player.x + 26, player.y - 4); ctx.lineTo(player.x + 15, player.y + 5); ctx.lineTo(player.x - 15, player.y + 6);
+    } else if (player.character === 'hinata') {
+        ctx.moveTo(player.x - 30, player.y - 2); ctx.quadraticCurveTo(player.x - 25, player.y - 31, player.x, player.y - 33); ctx.quadraticCurveTo(player.x + 25, player.y - 31, player.x + 29, player.y - 2); ctx.lineTo(player.x + 14, player.y - 5); ctx.lineTo(player.x + 8, player.y + 10); ctx.lineTo(player.x - 7, player.y + 8); ctx.lineTo(player.x - 15, player.y - 5);
+    } else if (player.character === 'shino') {
+        ctx.moveTo(player.x - 29, player.y - 5); ctx.lineTo(player.x - 26, player.y - 27); ctx.lineTo(player.x - 9, player.y - 22); ctx.lineTo(player.x - 2, player.y - 31); ctx.lineTo(player.x + 10, player.y - 22); ctx.lineTo(player.x + 22, player.y - 27); ctx.lineTo(player.x + 26, player.y - 2); ctx.lineTo(player.x + 15, player.y + 9); ctx.lineTo(player.x - 15, player.y + 7);
     } else {
         ctx.moveTo(player.x - 29, player.y - 3); ctx.quadraticCurveTo(player.x - 24, player.y - 28, player.x, player.y - 29); ctx.quadraticCurveTo(player.x + 24, player.y - 28, player.x + 29, player.y - 3); ctx.lineTo(player.x + 17, player.y - 8); ctx.lineTo(player.x + 11, player.y + 8); ctx.lineTo(player.x + 4, player.y - 7); ctx.lineTo(player.x - 3, player.y + 10); ctx.lineTo(player.x - 12, player.y - 7); ctx.lineTo(player.x - 21, player.y + 6);
     }
     ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+}
+
+function drawFaceDetails(player) {
+    ctx.save();
+    if (player.character === 'kiba') {
+        ctx.fillStyle = '#d63031'; ctx.beginPath(); ctx.arc(player.x - 10, player.y - 5, 4, 0, Math.PI * 2); ctx.arc(player.x + 10, player.y - 5, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    if (player.character === 'hinata') {
+        ctx.strokeStyle = '#1c3559'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(player.x - 11, player.y - 2, 7, 0, Math.PI * 2); ctx.arc(player.x + 11, player.y - 2, 7, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = '#dfefff'; ctx.beginPath(); ctx.arc(player.x - 11, player.y - 2, 2.5, 0, Math.PI * 2); ctx.arc(player.x + 11, player.y - 2, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+    if (player.character === 'shino') {
+        ctx.strokeStyle = '#2b2d3c'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(player.x - 17, player.y - 4); ctx.lineTo(player.x - 5, player.y - 4); ctx.moveTo(player.x + 5, player.y - 4); ctx.lineTo(player.x + 17, player.y - 4); ctx.stroke();
+        ctx.fillStyle = '#212630'; ctx.fillRect(player.x - 18, player.y + 10, 36, 12);
+    }
+    ctx.restore();
 }
