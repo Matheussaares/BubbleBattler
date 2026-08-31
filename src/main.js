@@ -189,7 +189,8 @@ function activateSpecial(player) {
     player.specialHit = false;
     player.shadowProgress = 0;
     player.specialTimer = player.character === 'sakura' ? GAME_CONFIG.SAKURA_SPECIAL_DURATION : player.character === 'choji' ? GAME_CONFIG.CHOJI_SPECIAL_DURATION : GAME_CONFIG.SPECIAL_DURATION;
-    player.specialDashTimer = ['sakura', 'shikamaru', 'ino', 'kiba', 'hinata', 'shino'].includes(player.character) ? 0 : 22;
+    // Alteração AQUI: Removido o 'kiba' da lista para ele receber o impulso do dash (22 frames)
+    player.specialDashTimer = ['sakura', 'shikamaru', 'ino', 'hinata', 'shino'].includes(player.character) ? 0 : 22;
     if (player.character === 'choji') player.radius = player.baseRadius * GAME_CONFIG.CHOJI_RADIUS_MULTIPLIER;
     if (player.character === 'ino') projectiles.push({ owner: player, type: player.character, x: player.x, y: player.y, speed: 8, life: 180 });
     if (player.character === 'shino') {
@@ -505,7 +506,8 @@ function applyMovementSlow(player, multiplier) {
     return multiplier;
 }
 function movePlayer(player, ax, ay) {
-    if (['naruto', 'sasuke'].includes(player.character) && player.specialActive) {
+    // Alteração AQUI: Adicionado 'kiba' na lista de perseguição de alvo
+    if (['naruto', 'sasuke', 'kiba'].includes(player.character) && player.specialActive) {
         const target = player === p1 ? p2 : p1;
         const angle = Math.atan2(target.y - player.y, target.x - player.x);
         const dashForce = player.specialDashTimer > 0 ? 2.1 : 0.9;
