@@ -9,6 +9,9 @@ export const shikamaruData = {
     specialDamage: GAME_CONFIG.SHIKAMARU_SPECIAL_DAMAGE
 };
 
+// Limite exato de distância que a sombra consegue alcançar (agora 500)
+const MAX_SHADOW_RANGE = 500; 
+
 function distanceBetween(first, second) {
     return Math.hypot(second.x - first.x, second.y - first.y);
 }
@@ -35,9 +38,25 @@ function segmentIntersectsRect(start, end, rect) {
 function getShadowPath(player, target, obstacles) {
     const angle = Math.atan2(target.y - player.y, target.x - player.x);
     const startDistance = player.radius - 4;
-    const targetDistance = target.radius - 4;
     const start = { x: player.x + Math.cos(angle) * startDistance, y: player.y + Math.sin(angle) * startDistance };
-    const end = { x: target.x - Math.cos(angle) * targetDistance, y: target.y - Math.sin(angle) * targetDistance };
+    
+    // --- LÓGICA DE LIMITE DE DISTÂNCIA E RESPONSIVIDADE ---
+    const distToTarget = distanceBetween(player, target);
+    let endX, endY;
+
+    if (distToTarget > MAX_SHADOW_RANGE) {
+        // Trava visual: a sombra para exatamente no limite de 500px
+        endX = player.x + Math.cos(angle) * MAX_SHADOW_RANGE;
+        endY = player.y + Math.sin(angle) * MAX_SHADOW_RANGE;
+    } else {
+        // Conecta perfeitamente na bolha do alvo se estiver no alcance
+        const targetDistance = target.radius - 4;
+        endX = target.x - Math.cos(angle) * targetDistance;
+        endY = target.y - Math.sin(angle) * targetDistance;
+    }
+    const end = { x: endX, y: endY };
+    // --- FIM DA LÓGICA DE LIMITE ---
+
     const path = [start];
     let current = start;
     const orderedObstacles = [...obstacles].sort((first, second) => distanceBetween(start, first) - distanceBetween(start, second));

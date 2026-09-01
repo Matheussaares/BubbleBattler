@@ -189,7 +189,6 @@ function activateSpecial(player) {
     player.specialHit = false;
     player.shadowProgress = 0;
     player.specialTimer = player.character === 'sakura' ? GAME_CONFIG.SAKURA_SPECIAL_DURATION : player.character === 'choji' ? GAME_CONFIG.CHOJI_SPECIAL_DURATION : GAME_CONFIG.SPECIAL_DURATION;
-    // Alteração AQUI: Removido o 'kiba' da lista para ele receber o impulso do dash (22 frames)
     player.specialDashTimer = ['sakura', 'shikamaru', 'ino', 'hinata', 'shino'].includes(player.character) ? 0 : 22;
     if (player.character === 'choji') player.radius = player.baseRadius * GAME_CONFIG.CHOJI_RADIUS_MULTIPLIER;
     if (player.character === 'ino') projectiles.push({ owner: player, type: player.character, x: player.x, y: player.y, speed: 8, life: 180 });
@@ -429,19 +428,26 @@ function updateSpecial(player) {
         player.hp = Math.min(GAME_CONFIG.INITIAL_HP, player.hp + GAME_CONFIG.SAKURA_HEAL_AMOUNT);
         createExplosion(player.x, player.y, player.accent, 3);
     }
+    
+    // --- LÓGICA DO SHIKAMARU ---
     if (player.specialActive && player.character === 'shikamaru' && !player.specialHit) {
         const target = player === p1 ? p2 : p1;
         const pathLength = getShadowPathLength(player, target, obstacles);
         player.shadowProgress = Math.min(1, player.shadowProgress + GAME_CONFIG.SHADOW_TRAVEL_SPEED / pathLength);
         if (player.shadowProgress >= 1) {
-            if (!isHinataDefending(target)) {
-                target.hp -= GAME_CONFIG.SHIKAMARU_SPECIAL_DAMAGE;
-                target.movementSlowTimer = GAME_CONFIG.SHIKAMARU_SLOW_DURATION;
+            // Limite de 500px na mecânica
+            if (Math.hypot(target.x - player.x, target.y - player.y) <= 500) {
+                if (!isHinataDefending(target)) {
+                    target.hp -= GAME_CONFIG.SHIKAMARU_SPECIAL_DAMAGE;
+                    target.movementSlowTimer = GAME_CONFIG.SHIKAMARU_SLOW_DURATION;
+                }
+                createExplosion(target.x, target.y, player.accent, 8);
             }
             player.specialHit = true;
-            createExplosion(target.x, target.y, player.accent, 8);
         }
     }
+    // --- FIM DA LÓGICA DO SHIKAMARU ---
+
     if (player.poisonTimer > 0) {
         player.poisonTimer--; player.poisonTickTimer--;
         if (player.poisonTickTimer <= 0) { player.hp -= GAME_CONFIG.INO_POISON_DAMAGE; player.poisonTickTimer = GAME_CONFIG.POISON_TICK_INTERVAL; createExplosion(player.x, player.y, '#9b59b6', 3); }
@@ -506,7 +512,6 @@ function applyMovementSlow(player, multiplier) {
     return multiplier;
 }
 function movePlayer(player, ax, ay) {
-    // Alteração AQUI: Adicionado 'kiba' na lista de perseguição de alvo
     if (['naruto', 'sasuke', 'kiba'].includes(player.character) && player.specialActive) {
         const target = player === p1 ? p2 : p1;
         const angle = Math.atan2(target.y - player.y, target.x - player.x);
@@ -514,17 +519,37 @@ function movePlayer(player, ax, ay) {
         ax += Math.cos(angle) * dashForce;
         ay += Math.sin(angle) * dashForce;
     }
-    if (ax || ay) { player.vx *= 0.9; player.vy *= 0.9; }
-    player.vx += ax;
-    player.vy += ay;
+    
+    // --- LÓGICA DE PARALISIA ---
+    if (player.movementSlowTimer > 0) {
+        // Zera a intenção de movimento
+        ax = 0;
+        ay = 0;
+        // Freia instantaneamente
+        player.vx = 0;
+        player.vy = 0;
+    } else {
+        if (ax || ay) { player.vx *= 0.9; player.vy *= 0.9; }
+        player.vx += ax;
+        player.vy += ay;
+    }
+    // --- FIM DA LÓGICA DE PARALISIA ---
+
     const speed = Math.hypot(player.vx, player.vy);
     let maxSpeed = player.speed * (player.specialActive && player.character === 'choji' ? GAME_CONFIG.CHOJI_SPEED_MULTIPLIER : player.specialActive && player.character !== 'sakura' ? 1.45 : 1);
+    
     if (player.movementSlowTimer > 0) {
-        maxSpeed *= GAME_CONFIG.SHIKAMARU_SLOW_FACTOR;
+        maxSpeed = 0; // Garante que a velocidade máxima seja 0 travando o oponente
     }
-    if (speed > maxSpeed) { player.vx = player.vx / speed * maxSpeed; player.vy = player.vy / speed * maxSpeed; }
+    
+    if (speed > maxSpeed) { 
+        player.vx = speed > 0 ? (player.vx / speed) * maxSpeed : 0; 
+        player.vy = speed > 0 ? (player.vy / speed) * maxSpeed : 0; 
+    }
+    
     player.x += player.vx;
     player.y += player.vy;
+    
     if (player.x - player.radius < 0 || player.x + player.radius > canvas.width) { player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x)); player.vx *= -1; }
     if (player.y - player.radius < 0 || player.y + player.radius > canvas.height) { player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y)); player.vy *= -1; }
 }
